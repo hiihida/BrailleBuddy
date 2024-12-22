@@ -1,0 +1,228 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <iostream>
+#include <unordered_map>
+#include <string>
+#include <String.h>
+
+// Replace with your Wifi network credentials
+char const * const ssid = "iPhone";
+char const * const password = "nurul2003";
+
+// Replace with your OpenAI API key
+char const * const apiKey = "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";
+
+// function prototype forward declarations:
+void get_input_and_send();
+const char* send_prompt_display_response(char const * const str);
+
+// Define pins
+const int buttonPin1 = 1;
+const int buttonPin2 = 2;
+const int buttonPin3 = 4;
+const int buttonPin4 = 5;
+const int buttonPin5 = 6;
+const int buttonPin6 = 7;
+
+// Previous states of the buttons
+bool previousStates[] = {HIGH, HIGH, HIGH, HIGH, HIGH, HIGH};
+
+// List to store pressed signals
+String pressedSignals = "";
+
+// Function to initialize the Braille dictionary
+void initializeBrailleMap(String brailleMap[26]) {
+  // Define mappings for English alphabet (uppercase) and space
+  brailleMap[0] = "1";     // A
+  brailleMap[1] = "12";    // B
+  brailleMap[2] = "14";    // C
+  brailleMap[3] = "145";   // D
+  brailleMap[4] = "15";    // E
+  brailleMap[5] = "124";   // F
+  brailleMap[6] = "1245";  // G
+  brailleMap[7] = "125";   // H
+  brailleMap[8] = "24";    // I
+  brailleMap[9] = "245";   // J
+  brailleMap[10] = "13";   // K
+  brailleMap[11] = "123";  // L
+  brailleMap[12] = "134";  // M
+  brailleMap[13] = "1345"; // N
+  brailleMap[14] = "135";  // O
+  brailleMap[15] = "1234"; // P
+  brailleMap[16] = "12345";// Q
+  brailleMap[17] = "1235"; // R
+  brailleMap[18] = "234";  // S
+  brailleMap[19] = "2345"; // T
+  brailleMap[20] = "136";  // U
+  brailleMap[21] = "1236"; // V
+  brailleMap[22] = "2456"; // W
+  brailleMap[23] = "1346"; // X
+  brailleMap[24] = "13456";// Y
+  brailleMap[25] = "1356"; // Z
+}
+
+// Function to reverse the Braille map and find the corresponding letter
+char mapBrailleToLetter(const String& brailleCode, String brailleMap[26]) {
+  // Loop through the Braille map to find the corresponding letter
+  for (int i = 0; i < 26; i++) {
+    if (brailleCode == brailleMap[i]) {
+      return 'A' + i;  // Return the letter based on the index (0 for 'A', 1 for 'B', etc.)
+    }
+  }
+  return '?'; // If not found, return '?' (unknown character)
+}
+
+// Flag to track if the initial setup request has been sent
+bool initialRequestSent = false;
+
+void setup() {
+
+  // Set the signal pin as input
+  pinMode(buttonPin1, INPUT_PULLUP); // Use internal pull-up resistor for the button
+  pinMode(buttonPin2, INPUT_PULLUP);
+  pinMode(buttonPin3, INPUT_PULLUP);
+  pinMode(buttonPin4, INPUT_PULLUP);
+  pinMode(buttonPin5, INPUT_PULLUP);
+  pinMode(buttonPin6, INPUT_PULLUP);
+
+  Serial.begin(115200);
+
+  // Connect to the wifi network
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  Serial.print("Connecting to WiFi ..");
+
+  while (WiFi.status() != WL_CONNECTED) {
+      Serial.print('.');
+      delay(1000);
+  }
+
+  Serial.write('\n');
+  Serial.print("Connected as: ");
+  Serial.println(WiFi.localIP());
+
+  // displays "I"
+  Serial.println("I am an English Braille to Malay translation assistant.");
+}
+
+void loop() {
+  // Read button signals
+  int currentStates[] = {
+    digitalRead(buttonPin1),
+    digitalRead(buttonPin2),
+    digitalRead(buttonPin3),
+    digitalRead(buttonPin4),
+    digitalRead(buttonPin5),
+    digitalRead(buttonPin6)
+  };
+
+  // Array of signal names
+  String signalNames[] = {"signal1", "signal2", "signal3", "signal4", "signal5", "signal6"};
+
+  // Check for state changes
+  for (int i = 0; i < 6; i++) {
+    if (currentStates[i] == LOW && previousStates[i] == HIGH) { // Button pressed
+      String signalNumber = signalNames[i].substring(6); // Extract the number
+      pressedSignals += signalNumber + ","; // Add to the list
+      Serial.println("Signal " + signalNumber + " is pressed");
+    }
+    // Update the previous state
+    previousStates[i] = currentStates[i];
+  }
+
+  // Remove trailing comma from the list, if any
+  pressedSignals.trim();
+  if (pressedSignals.endsWith(",")) {
+    pressedSignals.remove(pressedSignals.length() - 1);
+  }
+  // Print the list only if the 5th button (currentStates[4]) is LOW
+  if (currentStates[4] == LOW && pressedSignals.length() > 0) {
+    String pressedButtons = pressedSignals.substring(0, pressedSignals.length() - 1);
+    Serial.println("Pressed Signals: " + pressedButtons);
+    pressedSignals = "";
+
+    // Declare an array to hold the Braille codes for each letter
+    String brailleMap[26];
+    // Initialize the Braille map
+    initializeBrailleMap(brailleMap);
+    char letter = mapBrailleToLetter(pressedButtons, brailleMap);
+    Serial.println("Braille code '" + pressedButtons + "' corresponds to letter: " + letter);
+    //sorry hardcoded
+    String translatedLetter = "Saya";
+    String translationMessage = "The English word " + String(letter) + " is translated to " + translatedLetter + " in Malay.";
+    Serial.println(translationMessage);
+
+    // send letter to chatgpt
+    
+    // const char* translatedLetter = send_prompt_display_response(String(1, letter).c_str());
+    // Serial.println("The translated foreign text in Braille is: " + String(outputChar));
+    // String translationMessage = "The English word " + String(letter) + " is translated to " + String(translatedLetter) + " in Malay.";
+    // Serial.println(translationMessage);
+    //get_input_and_send(letter);
+  }
+
+  // Small delay to debounce
+  delay(50);
+}
+
+void get_input_and_send(char letter) {
+    const char* translatedLetter = send_prompt_display_response(String(1, letter).c_str());
+        //Serial.println("The translated foreign text in Braille is: " + String(outputChar));
+        String translationMessage = "The English word " + String(letter) + " is translated to " + String(translatedLetter) + " in Malay.";
+        Serial.println(translationMessage);
+}
+
+const char* send_prompt_display_response(char const * const str) {
+    // Construct the input text for the user message
+    String inputText = str;
+
+    // OpenAI API endpoint URL
+    String apiUrl = "https://api.openai.com/v1/chat/completions";
+
+    // Construct the JSON payload with the correct "messages" format
+    String payload = R"({
+      "model": "gpt-3.5-turbo",
+      "max_tokens": 100,
+      "temperature": 0.7,
+      "messages": [
+        {"role": "system", "content": "You are a English to Malay translation assistant. For each prompt you receive, automatically treat it as English and only respond with the Malay translation."},
+        {"role": "user", "content": ")"
+      + inputText + R"("}
+      ]
+    })";
+
+    Serial.print("Sending prompt: ");
+    Serial.print(inputText);
+    Serial.println(" to chatGPT...");
+
+    // Initialize HTTP client and set headers
+    HTTPClient http;
+    http.begin(apiUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", "Bearer " + String(apiKey));
+
+    // Send HTTP POST request
+    int httpResponseCode = http.POST(payload);
+
+    // Check for a successful response
+    if (httpResponseCode != 200) {
+        Serial.printf("Error %i: Unable to process the request.\n", httpResponseCode);
+        return "";
+    }
+
+    // Process and display the response
+    String response = http.getString();
+    Serial.println("Response received: ");
+    Serial.println(response);
+
+    // Parse the JSON response and extract the translated text
+    DynamicJsonDocument jsonDoc(1024);
+    DeserializationError error = deserializeJson(jsonDoc, response);
+    if (error) {
+        Serial.print("JSON deserialization failed: ");
+        Serial.println(error.c_str());
+        return "";
+    }
+}
