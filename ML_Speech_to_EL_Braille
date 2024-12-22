@@ -1,0 +1,253 @@
+/*
+ * ESP32 chatGPT demo
+ * 
+ * Malay (spoken) to English (Braille)
+ * 
+ */
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <iostream>
+#include <unordered_map>
+#include <string>
+
+
+// Replace with your Wifi network credentials
+char const * const ssid = "iPhone";
+char const * const password = "nurul2003";
+
+// Replace with your OpenAI API key
+char const * const apiKey = "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";
+
+// function prototype forward declarations:
+void get_input_and_send();
+const char* send_prompt_display_response(char const * const str);
+
+// Braille translation
+// Function to initialize the Braille dictionary
+std::unordered_map<char, std::string> initializeBrailleMap() {
+    std::unordered_map<char, std::string> brailleMap;
+
+    // Define mappings for English alphabet (uppercase)
+    brailleMap[' '] = "0";     // Dot 1
+    brailleMap['A'] = "1";     // Dot 1
+    brailleMap['B'] = "12";    // Dots 1 and 2
+    brailleMap['C'] = "14";    // Dots 1 and 4
+    brailleMap['D'] = "145";   // Dots 1, 4, and 5
+    brailleMap['E'] = "15";    // Dots 1 and 5
+    brailleMap['F'] = "124";   // Dots 1, 2, and 4
+    brailleMap['G'] = "1245";  // Dots 1, 2, 4, and 5
+    brailleMap['H'] = "125";   // Dots 1, 2, and 5
+    brailleMap['I'] = "24";    // Dots 2 and 4
+    brailleMap['J'] = "245";   // Dots 2, 4, and 5
+    brailleMap['K'] = "13";    // Dots 1 and 3
+    brailleMap['L'] = "123";   // Dots 1, 2, and 3
+    brailleMap['M'] = "134";   // Dots 1, 3, and 4
+    brailleMap['N'] = "1345";  // Dots 1, 3, 4, and 5
+    brailleMap['O'] = "135";   // Dots 1, 3, and 5
+    brailleMap['P'] = "1234";  // Dots 1, 2, 3, and 4
+    brailleMap['Q'] = "12345"; // Dots 1, 2, 3, 4, and 5
+    brailleMap['R'] = "1235";  // Dots 1, 2, 3, and 5
+    brailleMap['S'] = "234";   // Dots 2, 3, and 4
+    brailleMap['T'] = "2345";  // Dots 2, 3, 4, and 5
+    brailleMap['U'] = "136";   // Dots 1, 3, and 6
+    brailleMap['V'] = "1236";  // Dots 1, 2, 3, and 6
+    brailleMap['W'] = "2456";  // Dots 2, 4, 5, and 6
+    brailleMap['X'] = "1346";  // Dots 1, 3, 4, and 6
+    brailleMap['Y'] = "13456"; // Dots 1, 3, 4, 5, and 6
+    brailleMap['Z'] = "1356";  // Dots 1, 3, 5, and 6
+
+    return brailleMap;
+}
+
+
+void setup() {
+  Serial.begin(115200);
+
+  // Connect to the wifi network
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  Serial.print("Connecting to WiFi ..");
+  
+  while (WiFi.status() != WL_CONNECTED) {
+      Serial.print('.');
+      delay(1000);
+  }
+
+  Serial.write('\n');
+  Serial.print("Connected as: ");
+  Serial.println(WiFi.localIP());
+
+  // // Send request to OpenAI API
+  // send_prompt_display_response(
+  //   "You are a Malay To English translation assistant. "
+  //   "For each prompt you receive, treat it as Malay and respond with "
+  //   "only the English translation.");
+  // Send request to OpenAI API
+  send_prompt_display_response(
+    "You are a foreign language to English translation assistant. "
+    "For each prompt you receive, automatically detect what language it is and respond with "
+    "only the English translation.");
+
+  // displays "I"
+  Serial.println("I am a foreign language to English Braille translation assistant.");
+  Serial.println("Enter the text you want to translate:");
+  //String input = Serial.readString();
+  //const char* outputChar = send_prompt_display_response(input.c_str());
+  //delay(1000);
+  //Serial.println(outputChar);
+  //Serial.println(outputChar[0]);
+  //const char* braille = brailleTranslation(outputChar[0]);
+}
+
+
+void loop() {
+    get_input_and_send();
+}
+
+
+// 
+// Check for the prompt text to be received using the Serial port
+// and then submit it to chatgpt and display the response.
+// 
+void get_input_and_send() {
+    while (Serial.available() > 0) {
+        String prompt = Serial.readStringUntil('\n');
+        prompt.trim();
+        const char* outputChar = send_prompt_display_response(prompt.c_str());
+        Serial.println("The translated foreign text in Braille is: " + String(outputChar));
+
+        // receive and remove any trailing newlines or whitespace
+        // left in the Serial input buffer:
+        while (Serial.available() > 0 && isspace(Serial.peek())) {
+            Serial.read();
+        }
+    }
+}
+
+
+// Send a prompt to chatgpt and display the response
+
+const char* send_prompt_display_response(char const * const str) {
+    // Construct the input text for the user message
+    String inputText = str;
+
+    // OpenAI API endpoint URL
+    String apiUrl = "https://api.openai.com/v1/chat/completions";
+
+    // Construct the JSON payload with the correct "messages" format
+    String payload = R"({
+      "model": "gpt-3.5-turbo",
+      "max_tokens": 100,
+      "temperature": 0.7,
+      "messages": [
+        {"role": "system", "content": "You are a foreign language to English translation assistant. For each prompt you receive, automatically detect what language it is and respond with only the English translation."},
+        {"role": "user", "content": ")"
+      + inputText + R"("}
+      ]
+    })";
+
+    Serial.print("Sending prompt: ");
+    Serial.print(inputText);
+    Serial.println(" to chatGPT...");
+
+    // Initialize HTTP client and set headers
+    HTTPClient http;
+    http.begin(apiUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", "Bearer " + String(apiKey));
+
+    // Send HTTP POST request
+    int httpResponseCode = http.POST(payload);
+
+    // Check for a successful response
+    if (httpResponseCode != 200) {
+        Serial.printf("Error %i: Unable to process the request.\n", httpResponseCode);
+        return "";
+    }
+
+    // Process and display the response
+    String response = http.getString();
+    Serial.println("Response received: ");
+    Serial.println(response);
+
+    // Parse the JSON response and extract the translated text
+    DynamicJsonDocument jsonDoc(1024);
+    DeserializationError error = deserializeJson(jsonDoc, response);
+    if (error) {
+        Serial.print("JSON deserialization failed: ");
+        Serial.println(error.c_str());
+        return "";
+    }
+
+    // Extract the translation from the "choices" array
+    String outputText = jsonDoc["choices"][0]["message"]["content"].as<String>();
+    // Convert String to char array
+    //const char* outputChar = outputText.c_str();
+    // Serial.println("Raw outputText (before trim): ");
+    // Serial.println(outputText);  // Print the outputText
+
+    // Clean up any unwanted characters
+    outputText.trim();  // Remove leading/trailing whitespace and newlines
+    // Serial.println("Trimmed outputText: ");
+    // Serial.println(outputText);  // Print the cleaned outputText
+
+    // Convert each character of the string to uppercase
+    for (int i = 0; i < outputText.length(); i++) {
+        outputText[i] = toupper(outputText[i]);  // Convert each character to uppercase
+    }
+
+    // Convert String to const char* (pointer to internal string data)
+    const char* outputChar = outputText.c_str();
+
+    // Serial.println("OutputChar: ");
+    // Serial.println(outputChar);  // Print the output string
+    
+    // Serial.println("First Character ASCII Value:");
+    // Serial.println(outputChar[0], DEC);  // Print ASCII value of the first character
+
+    //return outputChar;
+    // Initialize Braille dictionary
+    std::unordered_map<char, std::string> brailleMap = initializeBrailleMap();
+
+    //inputChar = ' ';
+    //inputChar = 'g';
+
+    // Convert input to uppercase
+    //outputChar = toupper(outputChar);
+
+    // Check if the character exists in the Braille map
+    const char* translatedChar;
+    if (brailleMap.find(outputChar[0]) != brailleMap.end()) {
+        translatedChar = brailleMap[outputChar[0]].c_str();
+        Serial.println("Braille representation for " + String(outputChar) + " is " + String(translatedChar));
+    } else {
+        Serial.println("Invalid input. Please enter a valid uppercase English letter.");
+    }
+
+    return translatedChar;
+}
+
+
+// const char* brailleTranslation(char inputChar) {
+//   // Initialize Braille dictionary
+//     std::unordered_map<char, std::string> brailleMap = initializeBrailleMap();
+
+//     //inputChar = ' ';
+//     //inputChar = 'g';
+
+//     // Convert input to uppercase
+//     inputChar = toupper(inputChar);
+
+//     // Check if the character exists in the Braille map
+//     const char* translatedChar;
+//     if (brailleMap.find(inputChar) != brailleMap.end()) {
+//         translatedChar = brailleMap[inputChar].c_str();
+//         Serial.println("Braille representation for " + String(inputChar) + " is " + String(translatedChar));
+//     } else {
+//         Serial.println("Invalid input. Please enter a valid uppercase English letter.");
+//     }
+
+//     return translatedChar;
+// }
